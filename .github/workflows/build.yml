@@ -1,3 +1,4 @@
+
 name: Build ScreenCast APK
 
 on:
@@ -11,6 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -21,40 +23,46 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Supports both common phone workflows:
-      # 1) The extracted Android project is already at the repository root.
-      # 2) ScreenCastAndroid.zip was uploaded as-is to the repository root.
       - name: Prepare project source
         run: |
           if [ ! -f settings.gradle.kts ] && [ -f ScreenCastAndroid.zip ]; then
             unzip -oq ScreenCastAndroid.zip -d .
           fi
+
           if [ -f settings.gradle.kts ]; then
             project_dir="."
           elif [ -f ScreenCastAndroid/settings.gradle.kts ]; then
             project_dir="ScreenCastAndroid"
           else
-            echo "Could not find settings.gradle.kts. Upload ScreenCastAndroid.zip or the extracted project files."
+            echo "ERROR: Android project not found."
             exit 1
           fi
+
           echo "PROJECT_DIR=$project_dir" >> "$GITHUB_ENV"
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
 
-      - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses >/dev/null
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0"
 
-      - name: Install Android 36 SDK packages
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
-
-      - name: Install Gradle 8.13
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
 
       - name: Build debug APK
-        run: gradle --no-daemon -p "$PROJECT_DIR" :app:assembleDebug
+        run: |
+          gradle --no-daemon \
+            -p "$PROJECT_DIR" \
+            :app:assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -62,4 +70,3 @@ jobs:
           name: ScreenCast-debug-apk
           path: '**/app/build/outputs/apk/debug/app-debug.apk'
           if-no-files-found: error
-          
